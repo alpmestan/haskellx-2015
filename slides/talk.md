@@ -500,7 +500,7 @@ instance (KnownBackend b, HasServer api) => HasServer (Files b :> api) where
 
 Handlers using this new `Files` construct receive the appropriate data as argument.
 
-# Soundskell API
+# Soundskell API (1/2)
 
 This is the API type for our application.
 
@@ -509,31 +509,36 @@ type API = -- /register
            "register" :> Get '[HTML "register.tpl"] Object
                       -- registration form
 
-      :<|> "register" :> ReqBody '[FormUrlEncoded] User
-                      :> Post '[HTML "register_result.tpl"] Object
+      :<|> "register" :> ReqBody '[FormUrlEncoded] User :> Post '[HTML "register_result.tpl"] Object
                       -- registration processing
 
       :<|> "img" :> Raw   -- serve the image used in the header
       :<|> "songs" :> Raw -- serve the uploaded songs
-
-      :<|> "u" :> Auth :> (
-             -- /u/upload
-             "upload" :> Get '[HTML "upload.tpl"] Object
-                      -- upload form
-        :<|> "upload" :> Files Tmp
-                      :> Post '[HTML "upload_result.tpl"] User
-                      -- upload processing
-        
-             -- /u/:user 
-        :<|> Capture "user" Username
-          :> Get '[HTML "user_profile.tpl"] UserProfile
-          -- user profile
-      )
+      -- ... to be continued ...
 ```
 
 This includes HTML templates that integrate with servant by being a simple content type annotated by a template filename.
 
 Reminder: we could convert this app into a JSON webservice by sprinkling `JSON` in (most or) all content type lists.
+
+# Soundskell API (2/2)
+
+``` haskell
+     -- ...
+     :<|> "u" :> Auth :> (
+             -- /u/upload
+             "upload" :> Get '[HTML "upload.tpl"] Object
+                      -- upload form
+        :<|> "upload" :> Files Tmp :> Post '[HTML "upload_result.tpl"] User
+                      -- upload processing
+        
+             -- /u/:user 
+        :<|> Capture "user" Username :> Get '[HTML "user_profile.tpl"] UserProfile
+          -- user profile
+      )
+```
+
+Anything under `/u` is auth-protected.
 
 # Server implementation
 

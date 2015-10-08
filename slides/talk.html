@@ -450,35 +450,37 @@ server <span class="fu">=</span>
     <span class="dt">MultiPartData</span> b <span class="ot">-&gt;</span> <span class="dt">ServerT</span> api m</code></pre>
 <p>Handlers using this new <code>Files</code> construct receive the appropriate data as argument.</p>
 </div>
-<div id="soundskell-api" class="slide section level1">
-<h1>Soundskell API</h1>
+<div id="soundskell-api-12" class="slide section level1">
+<h1>Soundskell API (1/2)</h1>
 <p>This is the API type for our application.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">API</span> <span class="fu">=</span> <span class="co">-- /register</span>
            <span class="st">&quot;register&quot;</span> <span class="fu">:&gt;</span> <span class="dt">Get</span> <span class="ch">&#39;[HTML &quot;register.tpl&quot;] Object</span>
                       <span class="co">-- registration form</span>
 
-      <span class="fu">:&lt;|&gt;</span> <span class="st">&quot;register&quot;</span> <span class="fu">:&gt;</span> <span class="dt">ReqBody</span> <span class="ch">&#39;[FormUrlEncoded] User</span>
-                      <span class="fu">:&gt;</span> <span class="dt">Post</span> <span class="ch">&#39;[HTML &quot;register_result.tpl&quot;] Object</span>
+      <span class="fu">:&lt;|&gt;</span> <span class="st">&quot;register&quot;</span> <span class="fu">:&gt;</span> <span class="dt">ReqBody</span> <span class="ch">&#39;[FormUrlEncoded] User :&gt; Post &#39;</span>[<span class="dt">HTML</span> <span class="st">&quot;register_result.tpl&quot;</span>] <span class="dt">Object</span>
                       <span class="co">-- registration processing</span>
 
       <span class="fu">:&lt;|&gt;</span> <span class="st">&quot;img&quot;</span> <span class="fu">:&gt;</span> <span class="dt">Raw</span>   <span class="co">-- serve the image used in the header</span>
       <span class="fu">:&lt;|&gt;</span> <span class="st">&quot;songs&quot;</span> <span class="fu">:&gt;</span> <span class="dt">Raw</span> <span class="co">-- serve the uploaded songs</span>
-
-      <span class="fu">:&lt;|&gt;</span> <span class="st">&quot;u&quot;</span> <span class="fu">:&gt;</span> <span class="dt">Auth</span> <span class="fu">:&gt;</span> (
+      <span class="co">-- ... to be continued ...</span></code></pre>
+<p>This includes HTML templates that integrate with servant by being a simple content type annotated by a template filename.</p>
+<p>Reminder: we could convert this app into a JSON webservice by sprinkling <code>JSON</code> in (most or) all content type lists.</p>
+</div>
+<div id="soundskell-api-22" class="slide section level1">
+<h1>Soundskell API (2/2)</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">     <span class="co">-- ...</span>
+     <span class="fu">:&lt;|&gt;</span> <span class="st">&quot;u&quot;</span> <span class="fu">:&gt;</span> <span class="dt">Auth</span> <span class="fu">:&gt;</span> (
              <span class="co">-- /u/upload</span>
              <span class="st">&quot;upload&quot;</span> <span class="fu">:&gt;</span> <span class="dt">Get</span> <span class="ch">&#39;[HTML &quot;upload.tpl&quot;] Object</span>
                       <span class="co">-- upload form</span>
-        <span class="fu">:&lt;|&gt;</span> <span class="st">&quot;upload&quot;</span> <span class="fu">:&gt;</span> <span class="dt">Files</span> <span class="dt">Tmp</span>
-                      <span class="fu">:&gt;</span> <span class="dt">Post</span> <span class="ch">&#39;[HTML &quot;upload_result.tpl&quot;] User</span>
+        <span class="fu">:&lt;|&gt;</span> <span class="st">&quot;upload&quot;</span> <span class="fu">:&gt;</span> <span class="dt">Files</span> <span class="dt">Tmp</span> <span class="fu">:&gt;</span> <span class="dt">Post</span> <span class="ch">&#39;[HTML &quot;upload_result.tpl&quot;] User</span>
                       <span class="co">-- upload processing</span>
         
              <span class="co">-- /u/:user </span>
-        <span class="fu">:&lt;|&gt;</span> <span class="dt">Capture</span> <span class="st">&quot;user&quot;</span> <span class="dt">Username</span>
-          <span class="fu">:&gt;</span> <span class="dt">Get</span> <span class="ch">&#39;[HTML &quot;user_profile.tpl&quot;] UserProfile</span>
+        <span class="fu">:&lt;|&gt;</span> <span class="dt">Capture</span> <span class="st">&quot;user&quot;</span> <span class="dt">Username</span> <span class="fu">:&gt;</span> <span class="dt">Get</span> <span class="ch">&#39;[HTML &quot;user_profile.tpl&quot;] UserProfile</span>
           <span class="co">-- user profile</span>
       )</code></pre>
-<p>This includes HTML templates that integrate with servant by being a simple content type annotated by a template filename.</p>
-<p>Reminder: we could convert this app into a JSON webservice by sprinkling <code>JSON</code> in (most or) all content type lists.</p>
+<p>Anything under <code>/u</code> is auth-protected.</p>
 </div>
 <div id="server-implementation" class="slide section level1">
 <h1>Server implementation</h1>
