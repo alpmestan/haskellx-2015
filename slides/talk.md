@@ -341,15 +341,9 @@ Output:
 
 # Let's now do something interesting
 
-A little web application where users can upload audio files that would then appear on their profile, from which we can play the songs. We'll call it ** Soundskell**. Will demonstrate:
+A little web application where users can upload audio files that would then appear on their profile, from which we can play the songs. We'll call it **Soundskell**.
 
-- Authentication
-- Supporting JSON (webservice-oriented) and HTML (browser-oriented) interactions
-- Extending the type-level DSL with new "combinators" to *augment* the HTTP vocabulary for our needs
-- **TODO: Statically checked redirects**
-- **TODO: Type-safe links**
-- Managing a pool of database connections, used by the request handlers
-- API docs generation
+This will make us implement support for authentication and file upload through new constructs in the DSL.
 
 # Authentication combinator (1/5)
 
@@ -464,7 +458,7 @@ type API =-- /register
       :<|> "songs" :> Raw -- serve the uploaded songs
 
       :<|> "u" :> Auth :> (
-             -- /upload
+             -- /u/upload
              "upload" :> Get '[HTML "upload.tpl"] Object
                       -- upload form
         :<|> "upload" :> Files Tmp
@@ -491,7 +485,7 @@ server pool = return mempty -- registration form: doesn't need any data
          :<|> protectWith (\u -> withDB pool $ \conn -> checkUser conn u)
                           (\u -> return mempty -- upload form: no data necessary
                             :<|> uploadSong pool u -- upload processing
-                            :<|> (\uname -> getUserProfile pool uname u
+                            :<|> (\uname -> getUserProfile pool uname u)
                                  -- user profile
                           )
 ```
