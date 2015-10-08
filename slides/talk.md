@@ -510,6 +510,10 @@ main = do
 
 `loadTemplates` (from *servant-ede*) looks at the template files mentionned in the API type, loads and compiles them. All of this simply inferred from the type.
 
+# Final result
+
+![screenshot](../soundskell.png)
+
 # Summary
 
 *servant* lets you:

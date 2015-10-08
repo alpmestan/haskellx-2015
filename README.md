@@ -15,3 +15,5 @@ bash createdb.sh
 ```
 
 A `stack.yml` file is included as well.
+
+![screenshot](https://raw.githubusercontent.com/alpmestan/haskellx-2015/master/soundskell.png)
