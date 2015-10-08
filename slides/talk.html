@@ -89,10 +89,10 @@ main <span class="fu">=</span> scotty <span class="dv">3000</span> <span class="
 </div>
 <div id="common-problem" class="slide section level1">
 <h1>Common problem</h1>
-<p>Once the code is written, there is no way for us to get any type of information about the structure of the webservice or web application!</p>
+<p>Once the code is written, there is no way for us to get any type of information about the structure of the webservice or web application! Yet it's all in there.</p>
 <ul>
 <li>What endpoints or pages are available?</li>
-<li>What parameters can an endpoint or page take? Where should those be supplied?
+<li><p>What parameters can an endpoint or page take? Where should those be supplied?</p>
 <ul>
 <li>Query string parameters: <code>?q=what%20is%20a%20monad</code></li>
 <li>URL captures: <code>/hello/:name</code> will match requests to <code>/hello/haskellx</code>, with <code>name</code> being <code>&quot;haskellx&quot;</code></li>
@@ -111,12 +111,28 @@ main <span class="fu">=</span> scotty <span class="dv">3000</span> <span class="
 </ul>
 <p>We want that description to be written directly in the code, in order to be able to inspect, process and transform it like anything else we manipulate.</p>
 </div>
+<div id="how-to-design-the-description-dsl-12" class="slide section level1">
+<h1>How to design the description DSL (1/2)</h1>
+<ul>
+<li>We want it extensible, so listing all the constructs in an ADT won't work.</li>
+<li>We want to offer constructs for extracting query parameters, request bodies and friends, but we want some abstraction capability! Being able to add new constructs is nice.</li>
+<li>We also want the description to e.g affect types of request handlers.</li>
+</ul>
+</div>
+<div id="how-to-design-the-description-dsl-22" class="slide section level1">
+<h1>How to design the description DSL (2/2)</h1>
+<ul>
+<li><p>A description for a single-endpoint webservice should force the server-side implementation's type to be different to one with two endpoints, or with an endpoint that takes different parameters as input or returns a different entity in the response.</p></li>
+<li><p><strong>Lennart</strong> said it yesterday: we don't have dependent types, so we move the description of our domain at the type-level and use type-level strings for request path, parameter name, type-level lists for content types, and much more!</p></li>
+</ul>
+</div>
 <div id="previous-example-revisited-with-servant" class="slide section level1">
 <h1>Previous example, revisited with servant</h1>
 </div>
 <div id="describe" class="slide section level1">
 <h1>Describe</h1>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import </span><span class="dt">Servant</span>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE YouWishYouHadDependentTypes #-}</span>
+<span class="kw">import </span><span class="dt">Servant</span>
 
 <span class="kw">type</span> <span class="dt">API</span> <span class="fu">=</span> <span class="st">&quot;endpoint&quot;</span> <span class="fu">:&gt;</span> <span class="dt">QueryFlag</span> <span class="st">&quot;upper&quot;</span>
                       <span class="fu">:&gt;</span> <span class="dt">ReqBody</span> <span class="ch">&#39;[PlainText] Text</span>
@@ -138,16 +154,18 @@ answer upper texts <span class="fu">=</span>
     <span class="kw">then</span> map toUpper texts
     <span class="kw">else</span> map toLower texts
 
-<span class="ot">endpoint ::</span> <span class="dt">Server</span> <span class="dt">API</span> <span class="co">-- = EitherT ServantErr IO Text</span>
+<span class="ot">endpoint ::</span> <span class="dt">Server</span> <span class="dt">API</span> <span class="co">-- = Bool -&gt; Text -&gt; EitherT ServantErr IO Text</span>
 endpoint upper body <span class="fu">=</span> return (answer upper body)
 
 <span class="ot">main ::</span> <span class="dt">IO</span> ()
 main <span class="fu">=</span> run <span class="dv">8080</span> (serve api endpoint)</code></pre>
+<p>The type for the <code>endpoint</code> handler is checked against the description in <code>API</code>. No more <code>SomeMonad ()</code> return values where the types do not say at all what's sent in the response.</p>
+<p><code>QueryFlag</code> and <code>ReqBody</code> automatically become arguments to the corresponding handler! No need to worry about decoding them and handling decoding failures!</p>
 </div>
-<div id="proxy" class="slide section level1">
-<h1><code>Proxy</code> ?</h1>
+<div id="wait-wait-wait...-proxy" class="slide section level1">
+<h1>Wait wait wait... <code>Proxy</code> ?</h1>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Proxy</span> a <span class="fu">=</span> <span class="dt">Proxy</span></code></pre>
-<p>Apart from <code>undefined</code> and friends, there's only one value of type <code>Proxy a</code> for any given <code>a</code>.</p>
+<p>Apart from <code>undefined</code> and friends, there's only one value of type <code>Proxy a</code> for any given type <code>a</code>.</p>
 <p>In other words, when we run the server with <code>serve api endpoint</code>, we specifically target an API type and get <em>servant</em> to check that the request handlers &quot;match&quot; the API description.</p>
 <p><em>servant</em>'s way of asking you which &quot;central description&quot; it should check the implementation against.</p>
 </div>
@@ -179,14 +197,19 @@ queryEndpoint <span class="fu">=</span> client api (<span class="dt">BaseUrl</sp
 <pre class="sourceCode haskell"><code class="sourceCode haskell">queryEndpoint <span class="dt">False</span> <span class="st">&quot;Hello&quot;</span> <span class="co">-- returns &quot;hello&quot;</span>
 queryEndpoint <span class="dt">True</span>  <span class="st">&quot;Hello&quot;</span> <span class="co">-- returns &quot;HELLO&quot;</span></code></pre>
 </div>
-<div id="adding-content-types" class="slide section level1">
-<h1>Adding content types</h1>
-<p>Just add more MIME <strong>types</strong> in the content type list.</p>
+<div id="content-types-12" class="slide section level1">
+<h1>Content types (1/2)</h1>
+<p>Add more MIME <strong>types</strong> in the content type list to make your application compatible with more formats..</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">API</span> <span class="fu">=</span> <span class="st">&quot;endpoint&quot;</span> <span class="fu">:&gt;</span> <span class="dt">QueryFlag</span> <span class="st">&quot;upper&quot;</span>
                       <span class="fu">:&gt;</span> <span class="dt">ReqBody</span> <span class="ch">&#39;[PlainText, JSON] Text</span>
                       <span class="fu">:&gt;</span> <span class="dt">Post</span> <span class="ch">&#39;[PlainText, JSON] Text</span></code></pre>
 <p>They can all put specific constraints on the types that will be encoded (or decoded) to (or from) their format.</p>
 <p>The handlers are agnostic to the content types with which some data they manipulate are encoded. It lets you focus on the business logic.</p>
+</div>
+<div id="content-types-22" class="slide section level1">
+<h1>Content types (2/2)</h1>
+<p>Taken to the extreme:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">FIXME</span> <span class="co">-- servant image conversion</span></code></pre>
 </div>
 <div id="reuse-javascript-functions-to-query-the-api" class="slide section level1">
 <h1>Reuse : javascript functions to query the API</h1>
@@ -208,7 +231,7 @@ main <span class="fu">=</span> <span class="kw">do</span>
 </div>
 <div id="serving-static-files" class="slide section level1">
 <h1>Serving static files</h1>
-<p>Use <code>Raw</code> for serving static files or more generally &quot;untyped&quot; parts of your application. It is an &quot;escape hatch&quot;. Use <code>:&lt;|&gt;</code> to separate different (groups of) endpoints and their implementations.</p>
+<p>Use <code>Raw</code> for serving static files or more generally &quot;untyped&quot; parts of your application. It is an &quot;escape hatch&quot;.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">App</span> <span class="fu">=</span> <span class="dt">API</span>
       <span class="fu">:&lt;|&gt;</span> <span class="dt">Raw</span>
 
@@ -221,6 +244,7 @@ appServer <span class="fu">=</span> endpoint
 
 <span class="ot">main ::</span> <span class="dt">IO</span> ()
 main <span class="fu">=</span> run <span class="dv">8080</span> (serve app appServer)</code></pre>
+<p>Use <code>:&lt;|&gt;</code> to separate different (groups of) endpoints. Works at the value-level as well to separate the respective handlers for the &quot;endpoints&quot; they mirror.</p>
 </div>
 <div id="deriving-a-mock-server-12" class="slide section level1">
 <h1>Deriving a mock server (1/2)</h1>
@@ -229,7 +253,7 @@ main <span class="fu">=</span> <span class="kw">do</span>
   args <span class="ot">&lt;-</span> getArgs
   forkIO runClients
   run <span class="dv">8080</span> <span class="fu">$</span> <span class="kw">case</span> args <span class="kw">of</span>
-    [<span class="st">&quot;mock&quot;</span>] <span class="ot">-&gt;</span> serve app (mock api <span class="fu">:&lt;|&gt;</span> serveDirectory <span class="st">&quot;code/talk-examples&quot;</span>)
+    [<span class="st">&quot;mock&quot;</span>] <span class="ot">-&gt;</span> serve app (mock api <span class="fu">:&lt;|&gt;</span> serveDirectory <span class="st">&quot;js/&quot;</span>)
     _        <span class="ot">-&gt;</span> serve app appServer</code></pre>
 </div>
 <div id="deriving-a-mock-server-22" class="slide section level1">
@@ -240,21 +264,21 @@ main <span class="fu">=</span> <span class="kw">do</span>
 <div id="reuse-summary" class="slide section level1">
 <h1>Reuse: summary</h1>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- we feed servant something whose shape (Server api) depends</span>
-<span class="co">-- on the API type. This prevents the DSL to live at the value level,</span>
-<span class="co">-- would require dependent types.</span>
+<span class="co">-- on the API type.</span>
 <span class="ot">serve ::</span> <span class="dt">HasServer</span> api <span class="ot">=&gt;</span> <span class="dt">Proxy</span> api <span class="ot">-&gt;</span> <span class="dt">Server</span> api <span class="ot">-&gt;</span> <span class="dt">Application</span>
 
 <span class="co">-- we get back something whose shape (Client api) depends</span>
 <span class="co">-- on the API type.</span>
 <span class="ot">client ::</span> <span class="dt">HasClient</span> api <span class="ot">=&gt;</span> <span class="dt">Proxy</span> api <span class="ot">-&gt;</span> <span class="dt">BaseUrl</span> <span class="ot">-&gt;</span> <span class="dt">Client</span> api
 
+<span class="co">-- the &quot;typed holes&quot; of servant applications!</span>
 <span class="ot">mock ::</span> <span class="dt">HasMock</span> api <span class="ot">=&gt;</span> <span class="dt">Proxy</span> api <span class="ot">-&gt;</span> <span class="dt">Server</span> api
 <span class="fu">...</span></code></pre>
 <p>Every &quot;interpretation&quot; of the API description DSL is implemented using a typeclass. <em>servant</em> defines the meaning of <code>Get</code>, <code>ReqBody</code>, <code>Capture</code> and friends in all those contexts. They all rely on the <code>Proxy</code> that lets us target the API description type.</p>
 </div>
 <div id="how-are-get-reqbody-capture-and-friends-defined" class="slide section level1">
 <h1>How are <code>Get</code>, <code>ReqBody</code>, <code>Capture</code> and friends defined ?</h1>
-<p>Most of the time: empty data types!</p>
+<p>Most of the time: empty data types! &quot;Doesn't get simpler&quot;.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Get</span> (<span class="ot">contentTypes ::</span> [<span class="fu">*</span>]) a
 <span class="kw">data</span> <span class="dt">ReqBody</span> (<span class="ot">contentTypes ::</span> [<span class="fu">*</span>]) a
 <span class="kw">data</span> <span class="dt">Capture</span> (<span class="ot">name ::</span> <span class="dt">Symbol</span>) a</code></pre>
@@ -262,7 +286,7 @@ main <span class="fu">=</span> <span class="kw">do</span>
 </div>
 <div id="descriptions-as-types-types-as-abstractions-12" class="slide section level1">
 <h1>Descriptions as types, types as abstractions (1/2)</h1>
-<p>Easy to abstract away the boilerplate.</p>
+<p>Working with types is nice.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- managing @a@&#39;s that are</span>
 <span class="co">-- indexed by values of type @i@</span>
 <span class="kw">type</span> <span class="dt">Resource</span> (<span class="ot">resourceName ::</span> <span class="dt">Symbol</span>) i a <span class="fu">=</span>
@@ -272,7 +296,10 @@ main <span class="fu">=</span> <span class="kw">do</span>
                 <span class="dt">Get</span> <span class="ch">&#39;[JSON] a -- view a particular &#39;</span>a&#39;
            <span class="fu">:&lt;|&gt;</span> <span class="dt">Delete</span> <span class="ch">&#39;[] () -- delete a particular &#39;</span>a&#39;
       )
-  )</code></pre>
+  )
+
+<span class="kw">type</span> <span class="dt">API</span> <span class="fu">=</span> <span class="dt">Resource</span> <span class="st">&quot;users&quot;</span> <span class="dt">UserID</span> <span class="dt">User</span>
+      <span class="fu">:&lt;|&gt;</span> <span class="dt">Resource</span> <span class="st">&quot;products&quot;</span> <span class="dt">ProductID</span> <span class="dt">Product</span></code></pre>
 </div>
 <div id="descriptions-as-types-types-as-abstractions-22" class="slide section level1">
 <h1>Descriptions as types, types as abstractions (2/2)</h1>
@@ -285,7 +312,12 @@ main <span class="fu">=</span> <span class="kw">do</span>
 resource register getById deleteById <span class="fu">=</span>
   register <span class="fu">:&lt;|&gt;</span> byId
 
-  <span class="kw">where</span> byId i <span class="fu">=</span> getById i <span class="fu">:&lt;|&gt;</span> deleteById i</code></pre>
+  <span class="kw">where</span> byId i <span class="fu">=</span> getById i <span class="fu">:&lt;|&gt;</span> deleteById i
+
+<span class="ot">server ::</span> <span class="dt">Server</span> <span class="dt">API</span>
+server <span class="fu">=</span> resource addUser getUserById deleteUserById
+    <span class="fu">:&lt;|&gt;</span> resource addProduct getProductById deleteProductById</code></pre>
+<p>That type of approach can be taken further, but shows how easily you can build your own little abstractions tailored to your needs and your opinions on web API or web application design.</p>
 </div>
 <div id="extending-the-dsl-a-combinator-to-log-ip-addresses-14" class="slide section level1">
 <h1>Extending the DSL: a combinator to log IP addresses (1/4)</h1>
@@ -294,7 +326,7 @@ resource register getById deleteById <span class="fu">=</span>
 </div>
 <div id="extending-the-dsl-a-combinator-to-log-ip-addresses-24" class="slide section level1">
 <h1>Extending the DSL: a combinator to log IP addresses (2/4)</h1>
-<p>Next, we write an <code>HasServer</code> instance.</p>
+<p>Next, we write an <code>HasServer</code> instance. The only one we'll see in its entirety.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> <span class="dt">HasServer</span> api <span class="ot">=&gt;</span> <span class="dt">HasServer</span> (<span class="dt">LogIP</span> <span class="fu">:&gt;</span> api) <span class="kw">where</span>
   <span class="kw">type</span> <span class="dt">ServerT</span> (<span class="dt">LogIP</span> <span class="fu">:&gt;</span> api) m <span class="fu">=</span> <span class="dt">ServerT</span> api m
 
@@ -318,8 +350,11 @@ resource register getById deleteById <span class="fu">=</span>
 </div>
 <div id="lets-now-do-something-interesting" class="slide section level1">
 <h1>Let's now do something interesting</h1>
-<p>A little web application where users can upload audio files that would then appear on their profile, from which we can play the songs. We'll call it <strong>Soundskell</strong>.</p>
-<p>This will make us implement support for authentication and file upload through new constructs in the DSL.</p>
+<p>A little web application where users can upload audio files that would then appear on their profile, from which we can play the songs. We'll call it...</p>
+<div class="figure">
+<img src="../soundskell_logo.png" />
+</div>
+<p>This will make us implement support for authentication and file upload through new constructs in the DSL. Selected snippets shown here -- the entire runnable app is available in the repository for this talk.</p>
 </div>
 <div id="authentication-combinator-15" class="slide section level1">
 <h1>Authentication combinator (1/5)</h1>
@@ -353,6 +388,7 @@ resource register getById deleteById <span class="fu">=</span>
   ,<span class="ot"> protectedHandlers ::</span> handlers
   }
 
+<span class="co">-- use some sane defaults for the two &#39;Response&#39;s</span>
 <span class="ot">protectWith ::</span> (<span class="dt">User</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Bool</span>) <span class="ot">-&gt;</span> handlers <span class="ot">-&gt;</span> <span class="dt">AuthProtected</span> handlers</code></pre>
 </div>
 <div id="authentication-combinator-45" class="slide section level1">
@@ -373,12 +409,14 @@ resource register getById deleteById <span class="fu">=</span>
 <span class="kw">type</span> <span class="dt">SomeAPI</span> <span class="fu">=</span> <span class="dt">Auth</span> <span class="fu">:&gt;</span> <span class="dt">Get</span> <span class="ch">&#39;[PlainText] Text</span>
 
 <span class="ot">server ::</span> <span class="dt">Server</span> <span class="dt">SomeAPI</span>
-server <span class="fu">=</span> protectWith (\user <span class="ot">-&gt;</span> username <span class="fu">==</span> <span class="st">&quot;admin&quot;</span> <span class="fu">&amp;&amp;</span> password <span class="fu">==</span> <span class="st">&quot;admin&quot;</span>)
-                     (\user <span class="ot">-&gt;</span> return <span class="fu">$</span> <span class="st">&quot;Secret data for &quot;</span> <span class="fu">&lt;&gt;</span> username user)</code></pre>
+server <span class="fu">=</span>
+  protectWith (\user <span class="ot">-&gt;</span> username user <span class="fu">==</span> <span class="st">&quot;admin&quot;</span> <span class="fu">&amp;&amp;</span> password user <span class="fu">==</span> <span class="st">&quot;admin&quot;</span>)
+              (\user <span class="ot">-&gt;</span> return <span class="fu">$</span> <span class="st">&quot;Secret data for &quot;</span> <span class="fu">&lt;&gt;</span> username user)</code></pre>
+<p>We don't just return a handler anymore! It's &quot;decorated&quot; with the necessary data for our authentication-checking mechanism.</p>
 </div>
 <div id="file-upload-12" class="slide section level1">
 <h1>File upload (1/2)</h1>
-<p>We can do the same with file upload. Boring details skipped here but available in the repository for this talk (link in the last slide).</p>
+<p>We can do the same with file upload. Boring details skipped here but available in the repository for this talk.</p>
 <p>Type declarations:</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Mem</span> <span class="co">-- store uploaded files in memory</span>
 <span class="kw">data</span> <span class="dt">Tmp</span> <span class="co">-- store uploaded files in /tmp</span>
@@ -400,7 +438,7 @@ server <span class="fu">=</span> protectWith (\user <span class="ot">-&gt;</span
 <div id="soundskell-api" class="slide section level1">
 <h1>Soundskell API</h1>
 <p>This is the API type for our application.</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">API</span> <span class="fu">=--</span> <span class="fu">/</span>register
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">API</span> <span class="fu">=</span> <span class="co">-- /register</span>
            <span class="st">&quot;register&quot;</span> <span class="fu">:&gt;</span> <span class="dt">Get</span> <span class="ch">&#39;[HTML &quot;register.tpl&quot;] Object</span>
                       <span class="co">-- registration form</span>
 
@@ -424,7 +462,8 @@ server <span class="fu">=</span> protectWith (\user <span class="ot">-&gt;</span
           <span class="fu">:&gt;</span> <span class="dt">Get</span> <span class="ch">&#39;[HTML &quot;user_profile.tpl&quot;] UserProfile</span>
           <span class="co">-- user profile</span>
       )</code></pre>
-<p>This includes HTML templates that integrate with servant by being a simple content type.</p>
+<p>This includes HTML templates that integrate with servant by being a simple content type annotated by a template filename.</p>
+<p>Reminder: we could convert this app into a JSON webservice by sprinkling <code>JSON</code> in (most or) all content type lists.</p>
 </div>
 <div id="server-implementation" class="slide section level1">
 <h1>Server implementation</h1>
@@ -454,36 +493,45 @@ main <span class="fu">=</span> <span class="kw">do</span>
     <span class="dt">True</span>  <span class="ot">-&gt;</span> <span class="kw">do</span>
       pool <span class="ot">&lt;-</span> newPool
       run <span class="dv">8080</span> (app pool)</code></pre>
-<p><code>loadTemplates</code> (from <em>servant-ede</em>) looks at the template files mentionned in the API type, loads and compiles them. All of this simply inferred from the type.</p>
+<p><code>loadTemplates</code> (from <em>servant-ede</em>) looks at the template files mentionned in the API type, loads and compiles them.</p>
+<p>All of this simply inferred from the type. Implemented using a type family to collect (type-level) filenames that get turned into a good old value-level list of <code>FilePath</code>.</p>
 </div>
 <div id="final-result" class="slide section level1">
 <h1>Final result</h1>
 <div class="figure">
-<img src="../soundskell.png" alt="screenshot" /><p class="caption">screenshot</p>
+<img src="../soundskell.png" />
 </div>
+</div>
+<div id="not-covered" class="slide section level1">
+<h1>Not covered</h1>
+<ul>
+<li>Type-safe links, statically checked redirects, API documentation generation, changing the monad in which handlers run, ...</li>
+<li>Upcoming release: with authentication, easy client-function codegen for &quot;foreign&quot; languages, improved routing, ...</li>
+<li>(WIP) export our descriptions using the Swagger API description language, giving <em>servant</em> access to a whole new ecosystem.</li>
+<li>Started by 3 persons, getting close to <strong>40 contributors</strong>!</li>
+<li>Used in the wild and in anger by several companies already.</li>
+</ul>
 </div>
 <div id="summary" class="slide section level1">
 <h1>Summary</h1>
-<p><em>servant</em> lets you:</p>
 <ul>
 <li>specify a high-level description of your webservice or application</li>
 <li>this description language can be extended with your own, application-specific constructs</li>
 <li>check implementation of handlers against the description (<em>servant-server</em>)</li>
-<li>derive client functions in a few languages (Haskell, Javascript, Ruby) for free (<em>servant-client</em>, <em>servant-js</em>, <em>lackey</em>)</li>
+<li>derive client functions in a few languages (Haskell, Javascript, Ruby) for free (<em>servant-client</em>, <em>servant-js</em>, <em>lackey</em>) -- the sever doesn't even need to be written using servant. Write the description, ???, profit.</li>
 <li>get API docs with very little work (<em>servant-docs</em>)</li>
 <li>get mock servers for free (<em>servant-mock</em>)</li>
-<li>(WIP) export to the Swagger API description language, giving <em>servant</em> access to a whole new ecosystem</li>
 </ul>
 </div>
 <div id="questions" class="slide section level1">
 <h1>Questions ?</h1>
-<p>Useful links:</p>
+<p><strong>Thanks</strong> for listening! Links:</p>
 <ul>
 <li>slides and code for the examples and soundskell at <a href="http://github.com/alpmestan/haskellx-2015" class="uri">http://github.com/alpmestan/haskellx-2015</a></li>
 <li>website: <a href="http://haskell-servant.github.io/" class="uri">http://haskell-servant.github.io/</a> -- links to various useful resources + blog</li>
 <li>tutorial: <a href="http://haskell-servant.github.io/tutorial/" class="uri">http://haskell-servant.github.io/tutorial/</a> -- to get started with servant</li>
 <li>code repository: <a href="http://github.com/haskell-servant/servant" class="uri">http://github.com/haskell-servant/servant</a> -- with all servant packages</li>
-<li>paper: <a href="http://alpmestan.com/servant/" class="uri">http://alpmestan.com/servant/</a> -- explains the type-level DSL approach and the implementation -- accepted at <em>WGP'15</em></li>
+<li>paper: <a href="http://alpmestan.com/servant/" class="uri">http://alpmestan.com/servant/</a> -- explains the type-level DSL approach and the implementation, co-written with Julian Arni, Andres Löh and Sönke Hahn</li>
 </ul>
 </div>
 </body>

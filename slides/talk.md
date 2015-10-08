@@ -54,10 +54,11 @@ Nothing... unless the outside world needs to talk to those programs!
 
 # Common problem
 
-Once the code is written, there is no way for us to get any type of information about the structure of the webservice or web application!
+Once the code is written, there is no way for us to get any type of information about the structure of the webservice or web application! Yet it's all in there.
 
 - What endpoints or pages are available?
 - What parameters can an endpoint or page take? Where should those be supplied?
+
     * Query string parameters: `?q=what%20is%20a%20monad`
     * URL captures: `/hello/:name` will match requests to `/hello/haskellx`, with `name` being `"haskellx"`
     * Request body (in JSON? XML? custom format?)
@@ -73,11 +74,24 @@ This is exactly the kind of information you need when you write functions to que
 
 We want that description to be written directly in the code, in order to be able to inspect, process and transform it like anything else we manipulate.
 
+# How to design the description DSL (1/2)
+
+- We want it extensible, so listing all the constructs in an ADT won't work.
+- We want to offer constructs for extracting query parameters, request bodies and friends, but we want some abstraction capability! Being able to add new constructs is nice.
+- We also want the description to e.g affect types of request handlers.
+
+# How to design the description DSL (2/2) 
+
+- A description for a single-endpoint webservice should force the server-side implementation's type to be different to one with two endpoints, or with an endpoint that takes different parameters as input or returns a different entity in the response.
+
+- **Lennart** said it yesterday: we don't have dependent types, so we move the description of our domain at the type-level and use type-level strings for request path, parameter name, type-level lists for content types, and much more!
+
 # Previous example, revisited with servant
 
 # Describe
 
 ``` haskell
+{-# LANGUAGE YouWishYouHadDependentTypes #-}
 import Servant
 
 type API = "endpoint" :> QueryFlag "upper"
@@ -102,20 +116,24 @@ answer upper texts =
     then map toUpper texts
     else map toLower texts
 
-endpoint :: Server API -- = EitherT ServantErr IO Text
+endpoint :: Server API -- = Bool -> Text -> EitherT ServantErr IO Text
 endpoint upper body = return (answer upper body)
 
 main :: IO ()
 main = run 8080 (serve api endpoint)
 ```
 
-# `Proxy` ?
+The type for the `endpoint` handler is checked against the description in `API`. No more `SomeMonad ()` return values where the types do not say at all what's sent in the response.
+
+`QueryFlag` and `ReqBody` automatically become arguments to the corresponding handler! No need to worry about decoding them and handling decoding failures!
+
+# Wait wait wait... `Proxy` ?
 
 ``` haskell
 data Proxy a = Proxy
 ```
 
-Apart from `undefined` and friends, there's only one value of type `Proxy a` for any given `a`.
+Apart from `undefined` and friends, there's only one value of type `Proxy a` for any given type `a`.
 
 In other words, when we run the server with `serve api endpoint`, we specifically target an API type and get *servant* to check that the request handlers "match" the API description.
 
@@ -160,9 +178,9 @@ queryEndpoint False "Hello" -- returns "hello"
 queryEndpoint True  "Hello" -- returns "HELLO"
 ```
 
-# Adding content types
+# Content types (1/2)
 
-Just add more MIME **types** in the content type list.
+Add more MIME **types** in the content type list to make your application compatible with more formats..
 
 ``` haskell
 type API = "endpoint" :> QueryFlag "upper"
@@ -173,6 +191,14 @@ type API = "endpoint" :> QueryFlag "upper"
 They can all put specific constraints on the types that will be encoded (or decoded) to (or from) their format.
 
 The handlers are agnostic to the content types with which some data they manipulate are encoded. It lets you focus on the business logic.
+
+# Content types (2/2)
+
+Taken to the extreme:
+
+``` haskell
+FIXME -- servant image conversion
+```
 
 # Reuse : javascript functions to query the API
 
@@ -197,7 +223,7 @@ Automatically "compute" Javascript code to query the API. Write it at server sta
 
 # Serving static files
 
-Use `Raw` for serving static files or more generally "untyped" parts of your application. It is an "escape hatch". Use `:<|>` to separate different (groups of) endpoints and their implementations.
+Use `Raw` for serving static files or more generally "untyped" parts of your application. It is an "escape hatch".
 
 ``` haskell
 type App = API
@@ -214,6 +240,8 @@ main :: IO ()
 main = run 8080 (serve app appServer)
 ```
 
+Use `:<|>` to separate different (groups of) endpoints. Works at the value-level as well to separate the respective handlers for the "endpoints" they mirror.
+
 # Deriving a mock server (1/2)
 
 ``` haskell
@@ -222,7 +250,7 @@ main = do
   args <- getArgs
   forkIO runClients
   run 8080 $ case args of
-    ["mock"] -> serve app (mock api :<|> serveDirectory "code/talk-examples")
+    ["mock"] -> serve app (mock api :<|> serveDirectory "js/")
     _        -> serve app appServer
 ```
 
@@ -238,14 +266,14 @@ Two responses with `mock`:
 
 ``` haskell
 -- we feed servant something whose shape (Server api) depends
--- on the API type. This prevents the DSL to live at the value level,
--- would require dependent types.
+-- on the API type.
 serve :: HasServer api => Proxy api -> Server api -> Application
 
 -- we get back something whose shape (Client api) depends
 -- on the API type.
 client :: HasClient api => Proxy api -> BaseUrl -> Client api
 
+-- the "typed holes" of servant applications!
 mock :: HasMock api => Proxy api -> Server api
 ...
 ```
@@ -254,7 +282,7 @@ Every "interpretation" of the API description DSL is implemented using a typecla
 
 # How are `Get`, `ReqBody`, `Capture` and friends defined ?
 
-Most of the time: empty data types!
+Most of the time: empty data types! "Doesn't get simpler".
 
 ``` haskell
 data Get (contentTypes :: [*]) a
@@ -266,7 +294,7 @@ They all have instances for `HasServer`, `HasClient`, `HasMock`, etc. This is ho
 
 # Descriptions as types, types as abstractions (1/2)
 
-Easy to abstract away the boilerplate.
+Working with types is nice.
 
 ``` haskell
 -- managing @a@'s that are
@@ -279,6 +307,9 @@ type Resource (resourceName :: Symbol) i a =
            :<|> Delete '[] () -- delete a particular 'a'
       )
   )
+
+type API = Resource "users" UserID User
+      :<|> Resource "products" ProductID Product
 ```
 
 # Descriptions as types, types as abstractions (2/2)
@@ -294,7 +325,13 @@ resource register getById deleteById =
   register :<|> byId
 
   where byId i = getById i :<|> deleteById i
+
+server :: Server API
+server = resource addUser getUserById deleteUserById
+    :<|> resource addProduct getProductById deleteProductById
 ```
+
+That type of approach can be taken further, but shows how easily you can build your own little abstractions tailored to your needs and your opinions on web API or web application design.
 
 # Extending the DSL: a combinator to log IP addresses (1/4)
 
@@ -306,7 +343,7 @@ data LogIP
 
 # Extending the DSL: a combinator to log IP addresses (2/4)
 
-Next, we write an `HasServer` instance.
+Next, we write an `HasServer` instance. The only one we'll see in its entirety.
 
 ``` haskell
 instance HasServer api => HasServer (LogIP :> api) where
@@ -341,9 +378,11 @@ Output:
 
 # Let's now do something interesting
 
-A little web application where users can upload audio files that would then appear on their profile, from which we can play the songs. We'll call it **Soundskell**.
+A little web application where users can upload audio files that would then appear on their profile, from which we can play the songs. We'll call it...
 
-This will make us implement support for authentication and file upload through new constructs in the DSL.
+![](../soundskell_logo.png)
+
+This will make us implement support for authentication and file upload through new constructs in the DSL. Selected snippets shown here -- the entire runnable app is available in the repository for this talk.
 
 # Authentication combinator (1/5)
 
@@ -381,6 +420,7 @@ data AuthProtected handlers = AP
   , protectedHandlers :: handlers
   }
 
+-- use some sane defaults for the two 'Response's
 protectWith :: (User -> IO Bool) -> handlers -> AuthProtected handlers
 ```
 
@@ -407,13 +447,16 @@ protectWith :: (User -> IO Bool) -> handlers -> AuthProtected handlers
 type SomeAPI = Auth :> Get '[PlainText] Text
 
 server :: Server SomeAPI
-server = protectWith (\user -> username == "admin" && password == "admin")
-                     (\user -> return $ "Secret data for " <> username user)
+server =
+  protectWith (\user -> username user == "admin" && password user == "admin")
+              (\user -> return $ "Secret data for " <> username user)
 ```
+
+We don't just return a handler anymore! It's "decorated" with the necessary data for our authentication-checking mechanism.
 
 # File upload (1/2)
 
-We can do the same with file upload. Boring details skipped here but available in the repository for this talk (link in the last slide).
+We can do the same with file upload. Boring details skipped here but available in the repository for this talk.
 
 Type declarations:
 
@@ -446,7 +489,7 @@ Handlers using this new `Files` construct receive the appropriate data as argume
 This is the API type for our application.
 
 ``` haskell
-type API =-- /register
+type API = -- /register
            "register" :> Get '[HTML "register.tpl"] Object
                       -- registration form
 
@@ -472,7 +515,9 @@ type API =-- /register
       )
 ```
 
-This includes HTML templates that integrate with servant by being a simple content type.
+This includes HTML templates that integrate with servant by being a simple content type annotated by a template filename.
+
+Reminder: we could convert this app into a JSON webservice by sprinkling `JSON` in (most or) all content type lists.
 
 # Server implementation
 
@@ -508,33 +553,40 @@ main = do
       run 8080 (app pool)
 ```
 
-`loadTemplates` (from *servant-ede*) looks at the template files mentionned in the API type, loads and compiles them. All of this simply inferred from the type.
+`loadTemplates` (from *servant-ede*) looks at the template files mentionned in the API type, loads and compiles them.
+
+All of this simply inferred from the type. Implemented using a type family to collect (type-level) filenames that get turned into a good old value-level list of `FilePath`.
 
 # Final result
 
-![screenshot](../soundskell.png)
+![](../soundskell.png)
+
+# Not covered
+
+- Type-safe links, statically checked redirects, API documentation generation, changing the monad in which handlers run, ...
+- Upcoming release: with authentication, easy client-function codegen for "foreign" languages, improved routing, ...
+- (WIP) export our descriptions using the Swagger API description language, giving *servant* access to a whole new ecosystem.
+- Started by 3 persons, getting close to **40 contributors**!
+- Used in the wild and in anger by several companies already.
 
 # Summary
-
-*servant* lets you:
 
 - specify a high-level description of your webservice or application
 - this description language can be extended with your own, application-specific constructs
 - check implementation of handlers against the description (*servant-server*)
-- derive client functions in a few languages (Haskell, Javascript, Ruby) for free (*servant-client*, *servant-js*, *lackey*)
+- derive client functions in a few languages (Haskell, Javascript, Ruby) for free (*servant-client*, *servant-js*, *lackey*) -- the sever doesn't even need to be written using servant. Write the description, ???, profit.
 - get API docs with very little work (*servant-docs*)
 - get mock servers for free (*servant-mock*)
-- (WIP) export to the Swagger API description language, giving *servant* access to a whole new ecosystem
 
 # Questions ?
 
-Useful links:
+**Thanks** for listening! Links:
 
 - slides and code for the examples and soundskell at [http://github.com/alpmestan/haskellx-2015](http://github.com/alpmestan/haskellx-2015)
 - website: [http://haskell-servant.github.io/](http://haskell-servant.github.io/) -- links to various useful resources + blog
 - tutorial: [http://haskell-servant.github.io/tutorial/](http://haskell-servant.github.io/tutorial/) -- to get started with servant
 - code repository: [http://github.com/haskell-servant/servant](http://github.com/haskell-servant/servant) -- with all servant packages
-- paper: [http://alpmestan.com/servant/](http://alpmestan.com/servant/) -- explains the type-level DSL approach and the implementation -- accepted at *WGP'15*
+- paper: [http://alpmestan.com/servant/](http://alpmestan.com/servant/) -- explains the type-level DSL approach and the implementation, co-written with Julian Arni, Andres Löh and Sönke Hahn
 
 
 
