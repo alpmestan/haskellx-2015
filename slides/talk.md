@@ -84,7 +84,7 @@ We want that description to be written directly in the code, in order to be able
 
 - A description for a single-endpoint webservice should force the server-side implementation's type to be different to one with two endpoints, or with an endpoint that takes different parameters as input or returns a different entity in the response.
 
-- **Lennart** said it yesterday: we don't have dependent types, so we move the description of our domain at the type-level and use type-level strings for request path, parameter name, type-level lists for content types, and much more!
+- We don't have dependent types, so we move the description of our domain at the type-level and use type-level strings for request path, parameter name, type-level lists for content types, and much more!
 
 # Previous example, revisited with servant
 
@@ -194,11 +194,27 @@ The handlers are agnostic to the content types with which some data they manipul
 
 # Content types (2/2)
 
-Taken to the extreme:
+Taken to the extreme: an image conversation service, using `servant-JuicyPixels`.
 
 ``` haskell
-FIXME -- servant image conversion
+type ConversionApi
+     = ReqBody '[BMP, GIF, JPEG 50, PNG, TIFF, RADIANCE, TGA] DynamicImage
+    :> Post '[BMP, GIF, JPEG 50, PNG, TIFF, RADIANCE, TGA] DynamicImage
+
+conversionApi :: Proxy ConversionApi
+conversionApi = Proxy
+
+server :: Server ConversionApi
+server = return
+
+conversion :: Application
+conversion = serve conversionApi server
+
+main :: IO ()
+main = run 8001 conversion
 ```
+
+Yes, the request handler is simply `return`.
 
 # Reuse : javascript functions to query the API
 
@@ -566,7 +582,7 @@ All of this simply inferred from the type. Implemented using a type family to co
 - Type-safe links, statically checked redirects, API documentation generation, changing the monad in which handlers run, ...
 - Upcoming release: with authentication, easy client-function codegen for "foreign" languages, improved routing, ...
 - (WIP) export our descriptions using the Swagger API description language, giving *servant* access to a whole new ecosystem.
-- Started by 3 persons, getting close to **40 contributors**!
+- Started by 3 persons, now more than **30 contributors**!
 - Used in the wild and in anger by several companies already.
 
 # Summary
