@@ -1,0 +1,5 @@
+flags: {}
+packages:
+- '.'
+extra-deps: [ servant-ede-0.5.1, servant-mock-0.4.4.4 ]
+resolver: nightly-2015-09-20

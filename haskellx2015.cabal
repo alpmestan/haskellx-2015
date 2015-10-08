@@ -1,0 +1,69 @@
+name:                haskellx2015
+version:             0.1
+synopsis:            Code and slides for my Haskell eXchange 2015 talk
+description:         Code and slides for my Haskell eXchange 2015 talk
+homepage:            https://github.com/haskell-servant/haskellx-2015
+license:             PublicDomain
+license-file:        LICENSE
+author:              Alp Mestanogullari
+maintainer:          alpmestan@gmail.com
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable example-1
+  main-is: example1.hs
+  default-language: Haskell2010
+  build-depends:
+    aeson,
+    base,
+    either,
+    QuickCheck,
+    servant,
+    servant-client,
+    servant-jquery,
+    servant-mock,
+    servant-server,
+    text,
+    wai,
+    warp
+
+  hs-source-dirs: code/talk-examples
+
+executable servant-project
+  main-is:             main.hs
+  other-modules:
+    API,
+    Auth,
+    DB,
+    Files
+  build-depends:
+    aeson,
+    base >=4.7 && <5,
+    base64-bytestring,
+    bytestring,
+    directory,
+    ede,
+    either,
+    filepath,
+    http-types,
+    servant,
+    servant-server,
+    servant-client,
+    servant-docs,
+    servant-ede,
+    postgresql-simple,
+    resource-pool,
+    resourcet,
+    temporary,
+    text,
+    transformers,
+    text,
+    vector,
+    wai,
+    wai-extra,
+    warp,
+    word8
+  hs-source-dirs:      code
+  default-language:    Haskell2010
+  ghc-options:         -O2 -Wall -threaded -with-rtsopts=-N2 -fno-warn-unused-do-bind
