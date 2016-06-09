@@ -28,7 +28,7 @@ newPool :: IO (Pool Connection)
 newPool = createPool (connectPostgreSQL "dbname=haskellx")
                      close
                      2  -- 10 sub-pools
-                     60 -- we keep a unused connection open for 60 secs
+                     60 -- we keep an unused connection open for 60 secs
                      10 -- 100 open connections maximum per sub-pool 
 
 withDB :: MonadIO m => Pool Connection -> (Connection -> IO a) -> m a
